@@ -6,7 +6,7 @@ from scipy.optimize import curve_fit
 # Ground truth
 start_time = 0
 end_time = 30
-dt = 0.3  #random.uniform(0.01, 1)
+dt = random.uniform(0.01, 1)
 theta0_true = 0.4  # rounds
 omega_true = 0.1  # rounds per second
 
