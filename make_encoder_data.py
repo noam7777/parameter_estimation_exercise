@@ -26,17 +26,10 @@ def generate_encoder_data(theta0_true, omega_true):
     theta_measurements = np.mod(theta0_true + omega_true * time_stamps, 1)
     gaussian_noise = np.random.normal(mean, std_dev, size=time_stamps.shape)
     theta_measurements += gaussian_noise
-    fig1, ax1 = plt.subplots()
 
     random_values = np.random.rand(theta_measurements.shape[0])
     uniform_replacement = np.random.uniform(0, 1, size=theta_measurements.shape[0])
     theta_measurements[random_values < junk_measurement_prob] = uniform_replacement[random_values < junk_measurement_prob]
-    ax1.plot(time_stamps, theta_measurements, 'o', label='Original Data')
-    ax1.set_xlabel('Time [s]')
-    ax1.set_ylabel('Theta [radians]')
-    ax1.legend()
-
-
 
     return time_stamps, theta_measurements
 
@@ -44,9 +37,11 @@ def filter_junk_measurements(time_stamps, theta_measurements, threshold=0.25):
     filtered_theta = []
     filtered_time_stamps = []
     for i in range(4, len(theta_measurements) - 4):
-        adjacent_elements = theta_measurements[i-4:i+5]
-        median_adjacent = np.median(adjacent_elements)
-        if abs(theta_measurements[i] - median_adjacent) <= threshold:
+        adjacent_elements_back = theta_measurements[i-4:i]
+        adjacent_elements_front = theta_measurements[i:i+5]
+        median_adjacent_back = np.median(adjacent_elements_back)
+        median_adjacent_front = np.median(adjacent_elements_front)
+        if (abs(theta_measurements[i] - median_adjacent_back) <= threshold) or (abs(theta_measurements[i] - median_adjacent_front) < threshold):
             filtered_theta.append(theta_measurements[i])
             filtered_time_stamps.append(time_stamps[i])
     return np.array(filtered_time_stamps), np.array(filtered_theta)
@@ -74,10 +69,10 @@ def estimate_omega_and_theta0(time_stamps, theta_measurements):
     # Extract the estimated parameters
     omega_estimated, theta0_estimated = params
 
-    print("omega_estimated = " + str(omega_estimated))
-    print("omega_true = " + str(omega_true))
-    print("theta0_estimated = " + str(theta0_estimated))
-    print("theta0_true = " + str(theta0_true))
+    print("omega_estimated = " + str(omega_estimated) + "[Round]")
+    print("omega_true = " + str(omega_true) + "[Rounds Per Sec]")
+    print("theta0_estimated = " + str(theta0_estimated) + "[Round]")
+    print("theta0_true = " + str(theta0_true) + "[Rounds Per Sec]")
 
     # Plot the original and filtered data
     fig1, ax1 = plt.subplots()
@@ -85,7 +80,7 @@ def estimate_omega_and_theta0(time_stamps, theta_measurements):
     ax1.plot(filtered_time_stamps, unwrapped_theta, 'o', label='Filtered Unwrapped Data')
     ax1.plot(filtered_time_stamps, linear_model(filtered_time_stamps, omega_estimated, theta0_estimated), 'r-', label='Fitted Model')
     ax1.set_xlabel('Time [s]')
-    ax1.set_ylabel('Theta [radians]')
+    ax1.set_ylabel('Theta [Round]')
     ax1.legend()
 
     plt.show()
