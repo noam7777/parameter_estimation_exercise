@@ -3,9 +3,6 @@ from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
 def generate_encoder_data(theta0_true, omega_true, duration=30, dt=0.3, noise_std=0.03, junk_prob=0.05):
-    """
-    Generate simulated encoder data with noise and occasional junk measurements.
-    """
     start_time = 0
     end_time = duration
     time_stamps = np.arange(start_time, end_time, dt)
@@ -19,17 +16,6 @@ def generate_encoder_data(theta0_true, omega_true, duration=30, dt=0.3, noise_st
 
     return time_stamps, theta_measurements
 
-def filter_junk_measurements(time_stamps, theta_measurements, threshold=0.25):
-    filtered_theta = []
-    filtered_time_stamps = []
-    for i in range(4, len(theta_measurements) - 4):
-        adjacent_elements = theta_measurements[i-4:i+5]
-        median_adjacent = np.median(adjacent_elements)
-        if abs(theta_measurements[i] - median_adjacent) <= threshold:
-            filtered_theta.append(theta_measurements[i])
-            filtered_time_stamps.append(time_stamps[i])
-    return np.array(filtered_time_stamps), np.array(filtered_theta)
-
 def to_cartesian_coordinates(theta_measurements):
     x = np.cos(2 * np.pi * theta_measurements)
     y = np.sin(2 * np.pi * theta_measurements)
@@ -40,11 +26,9 @@ def find_angular_velocity_via_fft(time_stamps, x, y):
     N = len(time_stamps)
     T = (time_stamps[-1] - time_stamps[0]) / N
     
-    # Perform FFT
     fft_values = np.fft.fft(complex_signal)
     fft_frequencies = np.fft.fftfreq(N, T)
     
-    # Find the peak frequency
     peak_frequency = np.abs(fft_frequencies[np.argmax(np.abs(fft_values))])
     
     return peak_frequency
@@ -62,37 +46,71 @@ def find_initial_angle(time_stamps, theta_measurements_unwrapped, omega_estimate
     theta0_estimated = params[0]
     return theta0_estimated
 
-def estimate_encoder_parameters(time_stamps, theta_measurements):
-    # Filter junk measurements
-    filtered_time_stamps, filtered_theta = filter_junk_measurements(time_stamps, theta_measurements)
+def filter_junk_measurements(time_stamps, theta_measurements, omega_estimated, noise_std):
+    filtered_theta = []
+    filtered_time_stamps = []
+    num_points = len(theta_measurements)
     
+    for i in range(num_points):
+        valid_count = 0
+        total_count = 0
+        for j in range(max(0, i-4), min(num_points, i+5)):
+            if i != j:
+                expected_value = linear_model(time_stamps[j] - time_stamps[i], omega_estimated, theta_measurements[i])
+                diff = np.mod(abs(theta_measurements[j] - expected_value), 1)
+                if (diff > 0.5) :
+                    diff = 1-diff
+
+                if diff <= 3 * noise_std:
+                    valid_count += 1
+                total_count += 1
+        if valid_count >= total_count / 2:
+            filtered_theta.append(theta_measurements[i])
+            filtered_time_stamps.append(time_stamps[i])
+    
+    return np.array(filtered_time_stamps), np.array(filtered_theta)
+
+def estimate_encoder_parameters(time_stamps, theta_measurements, noise_std=0.03):
     # Convert to Cartesian coordinates
-    x, y = to_cartesian_coordinates(filtered_theta)
+    x, y = to_cartesian_coordinates(theta_measurements)
     
     # Remove mean to mitigate the effect of initial angle
     x -= np.mean(x)
     y -= np.mean(y)
     
     # Find angular velocity using FFT
-    omega_estimated = find_angular_velocity_via_fft(filtered_time_stamps, x, y)
-    
-    # Unwrap phase data
+    omega_estimated = find_angular_velocity_via_fft(time_stamps, x, y)
+    print(f"Estimated angular velocity: {omega_estimated}")
+
+    # Filter junk measurements using the new method
+    filtered_time_stamps, filtered_theta = filter_junk_measurements(time_stamps, theta_measurements, omega_estimated, noise_std)
+
+    fig1, ax1 = plt.subplots()
+    ax1.scatter(time_stamps, theta_measurements)
+    ax1.plot(filtered_time_stamps, filtered_theta)
+    ax1.set_xlabel('Time [s]')
+    ax1.set_ylabel('Theta [radians]')
+    ax1.legend()
+
+    plt.show()
+
+    # Unwrap the phase data again after filtering
     theta_measurements_unwrapped = unwrap_phase(filtered_theta)
     
     # Find initial angle using curve fitting
     theta0_estimated = find_initial_angle(filtered_time_stamps, theta_measurements_unwrapped, omega_estimated)
     
-    return omega_estimated, theta0_estimated
+    return omega_estimated, theta0_estimated, filtered_time_stamps, filtered_theta
 
 # Example usage
 theta0_true = 0.4  # rounds
-omega_true = 1.45  # rounds per second
+omega_true = 0.16  # rounds per second
 
 # Generate data
-time_stamps, theta_measurements = generate_encoder_data(theta0_true, omega_true, duration=30, dt=0.1)
+time_stamps, theta_measurements = generate_encoder_data(theta0_true, omega_true, duration=30, dt=1, noise_std=0.03, junk_prob=0.05)
 
 # Estimate parameters
-omega_estimated, theta0_estimated = estimate_encoder_parameters(time_stamps, theta_measurements)
+omega_estimated, theta0_estimated, filtered_time_stamps, filtered_theta = estimate_encoder_parameters(time_stamps, theta_measurements)
 
 print(f"Estimated angular velocity: {omega_estimated}")
 print(f"Estimated initial angle: {theta0_estimated}")
@@ -100,7 +118,6 @@ print(f"True angular velocity: {omega_true}")
 print(f"True initial angle: {theta0_true}")
 
 # Plot the original and filtered data
-filtered_time_stamps, filtered_theta = filter_junk_measurements(time_stamps, theta_measurements)
 unwrapped_theta = unwrap_phase(filtered_theta)
 
 fig1, ax1 = plt.subplots()
