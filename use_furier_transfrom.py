@@ -2,10 +2,22 @@ import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
-def generate_encoder_data(theta0_true, omega_true, duration=30, dt=0.3, noise_std=0.03, junk_prob=0.05):
+def generate_encoder_data(theta0_true, omega_true, duration=30, noise_std=0.03, junk_prob=0.05):
+    """
+    Generates encoder data with random time intervals.
+    """
     start_time = 0
-    end_time = duration
-    time_stamps = np.arange(start_time, end_time, dt)
+    time_stamps = [start_time]
+    
+    while time_stamps[-1] < duration:
+        next_dt = np.random.uniform(0, 1)
+        next_time = time_stamps[-1] + next_dt
+        if next_time >= duration:
+            break
+        time_stamps.append(next_time)
+    
+    time_stamps = np.array(time_stamps)
+    
     theta_measurements = np.mod(theta0_true + omega_true * time_stamps, 1)
     gaussian_noise = np.random.normal(0, noise_std, size=time_stamps.shape)
     theta_measurements += gaussian_noise
@@ -39,15 +51,8 @@ def unwrap_phase(theta_measurements):
 def linear_model(t, omega, theta0):
     return omega * t + theta0
 
-
-
-
 def find_initial_angle(time_stamps, theta_measurements_unwrapped, omega_estimated):
-    initial_guess = [0.8, 0.5]
-    # params, _ = curve_fit(lambda t, theta0: linear_model(t, omega_estimated, theta0), 
-    #                       time_stamps, theta_measurements_unwrapped, p0=initial_guess)
-    # theta0_estimated = params[0]
-    # return theta0_estimated
+    initial_guess = [omega_estimated, 0.5]
 
     params, params_covariance = curve_fit(linear_model, time_stamps, theta_measurements_unwrapped, p0=initial_guess)
 
@@ -113,7 +118,7 @@ theta0_true = 0.4  # rounds
 omega_true = 0.16  # rounds per second
 
 # Generate data
-time_stamps, theta_measurements = generate_encoder_data(theta0_true, omega_true, duration=30, dt=1, noise_std=0.03, junk_prob=0.05)
+time_stamps, theta_measurements = generate_encoder_data(theta0_true, omega_true, duration=30, noise_std=0.03, junk_prob=0.05)
 
 # Estimate parameters
 omega_estimated, theta0_estimated, filtered_time_stamps, filtered_theta = estimate_encoder_parameters(time_stamps, theta_measurements)
