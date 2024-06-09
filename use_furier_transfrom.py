@@ -39,12 +39,22 @@ def unwrap_phase(theta_measurements):
 def linear_model(t, omega, theta0):
     return omega * t + theta0
 
+
+
+
 def find_initial_angle(time_stamps, theta_measurements_unwrapped, omega_estimated):
-    initial_guess = [0]  # initial guess for theta0
-    params, _ = curve_fit(lambda t, theta0: linear_model(t, omega_estimated, theta0), 
-                          time_stamps, theta_measurements_unwrapped, p0=initial_guess)
-    theta0_estimated = params[0]
-    return theta0_estimated
+    initial_guess = [0.8, 0.5]
+    # params, _ = curve_fit(lambda t, theta0: linear_model(t, omega_estimated, theta0), 
+    #                       time_stamps, theta_measurements_unwrapped, p0=initial_guess)
+    # theta0_estimated = params[0]
+    # return theta0_estimated
+
+    params, params_covariance = curve_fit(linear_model, time_stamps, theta_measurements_unwrapped, p0=initial_guess)
+
+    # Extract the estimated parameters
+    omega_estimated, theta0_estimated = params
+
+    return omega_estimated, theta0_estimated
 
 def filter_junk_measurements(time_stamps, theta_measurements, omega_estimated, noise_std):
     filtered_theta = []
@@ -73,11 +83,7 @@ def filter_junk_measurements(time_stamps, theta_measurements, omega_estimated, n
 def estimate_encoder_parameters(time_stamps, theta_measurements, noise_std=0.03):
     # Convert to Cartesian coordinates
     x, y = to_cartesian_coordinates(theta_measurements)
-    
-    # Remove mean to mitigate the effect of initial angle
-    x -= np.mean(x)
-    y -= np.mean(y)
-    
+       
     # Find angular velocity using FFT
     omega_estimated = find_angular_velocity_via_fft(time_stamps, x, y)
     print(f"Estimated angular velocity: {omega_estimated}")
@@ -98,9 +104,9 @@ def estimate_encoder_parameters(time_stamps, theta_measurements, noise_std=0.03)
     theta_measurements_unwrapped = unwrap_phase(filtered_theta)
     
     # Find initial angle using curve fitting
-    theta0_estimated = find_initial_angle(filtered_time_stamps, theta_measurements_unwrapped, omega_estimated)
+    omega_estimated_updated, theta0_estimated = find_initial_angle(filtered_time_stamps, theta_measurements_unwrapped, omega_estimated)
     
-    return omega_estimated, theta0_estimated, filtered_time_stamps, filtered_theta
+    return omega_estimated_updated, theta0_estimated, filtered_time_stamps, filtered_theta
 
 # Example usage
 theta0_true = 0.4  # rounds
